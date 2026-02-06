@@ -476,6 +476,7 @@ class SA {
     const timer &total_timer;
     const double SA_TIME_LIMIT;
     const State &init_state;
+    const RNG::AliasTable &move_selector;
 
     inline void print_stats(i64 iter, f64 time, f64 temp, score_t score,
                             score_t best) {
@@ -503,9 +504,9 @@ class SA {
 
   public:
     SA(const Input &in, const timer &total_timer, const double SA_TIME_LIMIT,
-       const State &init_state)
+       const State &init_state, const RNG::AliasTable &move_selector)
         : in(in), total_timer(total_timer), SA_TIME_LIMIT(SA_TIME_LIMIT),
-          init_state(init_state) {}
+          init_state(init_state), move_selector(move_selector) {}
 
     State run() {
         State state = init_state;
@@ -626,6 +627,13 @@ class Solver {
   public:
     Solver(Input &in, timer &total_timer) : in(in), total_timer(total_timer) {}
     void solve() {
+        // 近傍選択テーブルの初期化
+        RNG::AliasTable move_selector;
+        if constexpr (DEBUG) {
+            assert((int)MOVE_NAMES.size() == NUM_MOVES);
+            assert((int)MOVE_WEIGHTS.size() == NUM_MOVES);
+        }
+        move_selector.build(MOVE_WEIGHTS);
         // todo: SAの実行など
     }
     void print() {
@@ -633,17 +641,10 @@ class Solver {
     }
 };
 
-// 近傍選択用（AliasTable）
-RNG::AliasTable move_selector;
 int main() {
     timer total_timer;
     init_temp_table(); // 温度減衰テーブルの初期化
     init_log_table();  // logテーブルの初期化
-    if constexpr (DEBUG) {
-        assert((int)MOVE_NAMES.size() == NUM_MOVES);
-        assert((int)MOVE_WEIGHTS.size() == NUM_MOVES);
-    }
-    move_selector.build(MOVE_WEIGHTS); // 近傍選択テーブルの初期化
     Input in;
     in.input();
     Solver solver(in, total_timer);
