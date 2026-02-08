@@ -3,12 +3,7 @@
 // #pragma GCC optimize("unroll-loops")
 // #pragma GCC optimize("Ofast")
 #include <bits/stdc++.h>
-// INCLUDE <experimental/simd>
-// INCLUDE <atcoder/all>
-#include <ext/pb_ds/assoc_container.hpp> // clangで提出する場合はコメントアウト
-// #include <immintrin.h>
-// #include <sys/time.h>
-// #include <x86intrin.h>
+
 using namespace std;
 constexpr bool DEBUG = true;
 // ==========================================
@@ -53,31 +48,6 @@ using f64 = double;
 #define rep(i, n) for (i64 i = 0; i < (i64)(n); i++)
 template <class T> using min_queue = priority_queue<T, vector<T>, greater<T>>;
 template <class T> using max_queue = priority_queue<T>;
-struct uint64_hash {
-    static inline uint64_t rotr(uint64_t x, unsigned k) {
-        return (x >> k) | (x << (8U * sizeof(uint64_t) - k));
-    }
-    static inline uint64_t hash_int(uint64_t x) noexcept {
-        auto h1 = x * (uint64_t)(0xA24BAED4963EE407);
-        auto h2 = rotr(x, 32U) * (uint64_t)(0x9FB21C651E98DF25);
-        auto h = rotr(h1 + h2, 32U);
-        return h;
-    }
-    size_t operator()(uint64_t x) const {
-        static const uint64_t FIXED_RANDOM =
-            std::chrono::steady_clock::now().time_since_epoch().count();
-        return hash_int(x + FIXED_RANDOM);
-    }
-};
-template <typename K, typename V,
-          typename Hash = uint64_hash> // clangで提出する場合はコメントアウト
-using hash_map =
-    __gnu_pbds::gp_hash_table<K, V,
-                              Hash>; // clangで提出する場合はコメントアウト
-template <typename K,
-          typename Hash = uint64_hash> // clangで提出する場合はコメントアウト
-using hash_set = hash_map<K, __gnu_pbds::null_type,
-                          Hash>; // clangで提出する場合はコメントアウト
 
 // Constant
 const double pi = 3.141592653589793238;
@@ -436,16 +406,15 @@ class AliasWeightedSampler {
     }
 };
 // Timer
-struct timer {
-    chrono::high_resolution_clock::time_point t_begin;
-    timer() { t_begin = chrono::high_resolution_clock::now(); }
-    void reset() { t_begin = chrono::high_resolution_clock::now(); }
+struct Timer {
+    chrono::steady_clock::time_point t_begin;
+    Timer() { t_begin = chrono::steady_clock::now(); }
+    void reset() { t_begin = chrono::steady_clock::now(); }
     float elapsed() const {
-        return chrono::duration<float>(chrono::high_resolution_clock::now() -
-                                       t_begin)
+        return chrono::duration<float>(chrono::steady_clock::now() - t_begin)
             .count();
     }
-};
+} timer;
 // Util
 template <class T> T &smin(T &x, T const &y) {
     x = min(x, y);
@@ -586,17 +555,17 @@ struct Input {
     void input() {
         // todo: 入力読み込み
     }
-};
+} in;
 
 struct State {
     score_t score = -1;
     // todo: 状態変数
 
-    State(const Input &in) {
+    State() {
         // todo: 初期解生成
     }
 
-    score_t calc_score_full(const Input &in) {
+    score_t calc_score_full() {
         score_t result = 0;
         // todo: フルスコア計算
         return result;
@@ -618,8 +587,6 @@ struct MoveStats {
 i64 iter_count = 0;
 
 class SA {
-    const Input &in;
-    const timer &total_timer;
     const double SA_TIME_LIMIT;
     const State &init_state;
     AliasWeightedSampler &move_selector;
@@ -649,18 +616,18 @@ class SA {
     }
 
   public:
-    SA(const Input &in, const timer &total_timer, const double SA_TIME_LIMIT,
-       const State &init_state, AliasWeightedSampler &move_selector)
-        : in(in), total_timer(total_timer), SA_TIME_LIMIT(SA_TIME_LIMIT),
-          init_state(init_state), move_selector(move_selector) {}
+    SA(const double SA_TIME_LIMIT, const State &init_state,
+       AliasWeightedSampler &move_selector)
+        : SA_TIME_LIMIT(SA_TIME_LIMIT), init_state(init_state),
+          move_selector(move_selector) {}
 
     State run() {
         State state = init_state;
-        state.score = state.calc_score_full(in);
+        state.score = state.calc_score_full();
         State best_state = state;
 
         f64 current_temp = START_TEMP;
-        f64 time_start = total_timer.elapsed();
+        f64 time_start = timer.elapsed();
         f64 time_now = time_start;
 
         while (true) {
@@ -668,7 +635,7 @@ class SA {
 
             // 時間チェック
             if ((iter_count & TIME_CHECK_INTERVAL) == 0) {
-                time_now = total_timer.elapsed();
+                time_now = timer.elapsed();
                 if (time_now > SA_TIME_LIMIT)
                     break;
                 if constexpr (ALLOW_WORSE_MOVES) {
@@ -757,7 +724,7 @@ class SA {
         if constexpr (!ALLOW_WORSE_MOVES)
             best_state = state;
         // DEBUGに関わらず出力
-        cerr << "Time: " << fixed << setprecision(3) << (total_timer.elapsed())
+        cerr << "Time: " << fixed << setprecision(3) << (timer.elapsed())
              << " Iter: " << iter_count << " Score: " << best_state.score << el;
         return best_state;
     }
@@ -767,11 +734,9 @@ class SA {
 // Solver
 // ==========================================
 class Solver {
-    Input &in;
-    timer &total_timer;
 
   public:
-    Solver(Input &in, timer &total_timer) : in(in), total_timer(total_timer) {}
+    Solver() {}
     void solve() {
         // 近傍選択テーブルの初期化
         AliasWeightedSampler move_selector;
@@ -788,13 +753,11 @@ class Solver {
 };
 
 int main() {
-    timer total_timer;
     init_temp_table(); // 温度減衰テーブルの初期化
     init_log_table();  // logテーブルの初期化
     // init_gauss_table(); // ガウシアンテーブルの初期化
-    Input in;
     in.input();
-    Solver solver(in, total_timer);
+    Solver solver;
     solver.solve();
     solver.print();
     return 0;

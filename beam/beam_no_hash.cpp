@@ -2,13 +2,9 @@
 // #pragma GCC optimize("O3")
 // #pragma GCC optimize("unroll-loops")
 // #pragma GCC optimize("Ofast")
-#include <bits/stdc++.h>
-// INCLUDE <experimental/simd>
 #include <atcoder/all>
-#include <ext/pb_ds/assoc_container.hpp> // clangで提出する場合はコメントアウト
-// #include <immintrin.h>
-// #include <sys/time.h>
-// #include <x86intrin.h>
+#include <bits/stdc++.h>
+
 using namespace std;
 constexpr bool DEBUG = true;
 constexpr double TIME_LIMIT = 1.95;
@@ -29,31 +25,6 @@ using f64 = double;
 #define rep(i, n) for (i64 i = 0; i < (i64)(n); i++)
 template <class T> using min_queue = priority_queue<T, vector<T>, greater<T>>;
 template <class T> using max_queue = priority_queue<T>;
-struct uint64_hash {
-    static inline uint64_t rotr(uint64_t x, unsigned k) {
-        return (x >> k) | (x << (8U * sizeof(uint64_t) - k));
-    }
-    static inline uint64_t hash_int(uint64_t x) noexcept {
-        auto h1 = x * (uint64_t)(0xA24BAED4963EE407);
-        auto h2 = rotr(x, 32U) * (uint64_t)(0x9FB21C651E98DF25);
-        auto h = rotr(h1 + h2, 32U);
-        return h;
-    }
-    size_t operator()(uint64_t x) const {
-        static const uint64_t FIXED_RANDOM =
-            std::chrono::steady_clock::now().time_since_epoch().count();
-        return hash_int(x + FIXED_RANDOM);
-    }
-};
-template <typename K, typename V,
-          typename Hash = uint64_hash> // clangで提出する場合はコメントアウト
-using hash_map =
-    __gnu_pbds::gp_hash_table<K, V,
-                              Hash>; // clangで提出する場合はコメントアウト
-template <typename K,
-          typename Hash = uint64_hash> // clangで提出する場合はコメントアウト
-using hash_set = hash_map<K, __gnu_pbds::null_type,
-                          Hash>; // clangで提出する場合はコメントアウト
 
 // Constant
 const double pi = 3.141592653589793238;
@@ -412,16 +383,15 @@ class AliasWeightedSampler {
     }
 };
 // Timer
-struct timer {
-    chrono::high_resolution_clock::time_point t_begin;
-    timer() { t_begin = chrono::high_resolution_clock::now(); }
-    void reset() { t_begin = chrono::high_resolution_clock::now(); }
+struct Timer {
+    chrono::steady_clock::time_point t_begin;
+    Timer() { t_begin = chrono::steady_clock::now(); }
+    void reset() { t_begin = chrono::steady_clock::now(); }
     float elapsed() const {
-        return chrono::duration<float>(chrono::high_resolution_clock::now() -
-                                       t_begin)
+        return chrono::duration<float>(chrono::steady_clock::now() - t_begin)
             .count();
     }
-};
+} timer;
 // Util
 template <class T> T &smin(T &x, T const &y) {
     x = min(x, y);
@@ -545,8 +515,7 @@ struct BayesianBeamWidthSuggester {
     BayesianBeamWidthSuggester(int max_turn, int warmup_turn,
                                double time_limit_sec,
                                size_t standard_beam_width,
-                               size_t min_beam_width, size_t max_beam_width,
-                               timer &t)
+                               size_t min_beam_width, size_t max_beam_width)
         : time_limit_sec(time_limit_sec), current_turn(0), max_turn(max_turn),
           warmup_turn(warmup_turn), min_beam_width(min_beam_width),
           max_beam_width(max_beam_width), current_beam_width(0) {
@@ -556,13 +525,13 @@ struct BayesianBeamWidthSuggester {
         dist =
             GaussInverseGamma::from_pseudo_observation(mean_sec, stddev_sec, 3);
         max_memory_turn = max_turn / 5;
-        start_time = t.elapsed();
+        start_time = timer.elapsed();
         last_time = start_time;
     }
 
-    size_t suggest(timer &t) {
+    size_t suggest() {
         if (current_turn > warmup_turn && current_beam_width > 0) {
-            float now = t.elapsed();
+            float now = timer.elapsed();
             double elapsed = (double)(now - last_time);
             double elapsed_per_beam = elapsed / current_beam_width;
             dist.update(elapsed_per_beam);
@@ -573,7 +542,7 @@ struct BayesianBeamWidthSuggester {
             }
         }
 
-        last_time = t.elapsed();
+        last_time = timer.elapsed();
 
         if (current_turn >= max_turn) {
             current_beam_width = min_beam_width;
@@ -582,7 +551,7 @@ struct BayesianBeamWidthSuggester {
         }
 
         double remaining_turn = (double)(max_turn - current_turn);
-        double elapsed_time = (double)t.elapsed();
+        double elapsed_time = (double)timer.elapsed();
         double remaining_time = time_limit_sec - elapsed_time;
 
         auto [mean, std_dev] = dist.expected();
@@ -1055,7 +1024,7 @@ void write_beam_log(const vector<TurnLog> &logs) {
 }
 
 // ビームサーチを行う関数
-vector<Action> beam_search(const Config &config, const State &state, timer &t) {
+vector<Action> beam_search(const Config &config, const State &state) {
     Tree tree(state, config);
 
     // 動的調整の初期化
@@ -1064,8 +1033,8 @@ vector<Action> beam_search(const Config &config, const State &state, timer &t) {
         suggester = make_unique<BayesianBeamWidthSuggester>(
             config.expected_turn, config.warmup_turn, config.time_limit,
             config.initial_beam_width, config.min_beam_width,
-            config.max_beam_width, t);
-        config.current_beam_width_ = suggester->suggest(t);
+            config.max_beam_width);
+        config.current_beam_width_ = suggester->suggest();
     }
 
     // 新しいノード候補の集合
@@ -1084,7 +1053,7 @@ vector<Action> beam_search(const Config &config, const State &state, timer &t) {
         if (selector.have_finished()) {
             // ターン数最小化型の問題で実行可能解が見つかったとき
             if constexpr (DEBUG) {
-                turn_logs.push_back(selector.collect_log(turn, t.elapsed(),
+                turn_logs.push_back(selector.collect_log(turn, timer.elapsed(),
                                                          config.beam_width()));
                 write_beam_log(turn_logs);
             }
@@ -1100,7 +1069,7 @@ vector<Action> beam_search(const Config &config, const State &state, timer &t) {
         if (turn == config.max_turn - 1) {
             // ターン数固定型の問題で全ターンが終了したとき
             if constexpr (DEBUG) {
-                turn_logs.push_back(selector.collect_log(turn, t.elapsed(),
+                turn_logs.push_back(selector.collect_log(turn, timer.elapsed(),
                                                          config.beam_width()));
                 write_beam_log(turn_logs);
             }
@@ -1114,7 +1083,7 @@ vector<Action> beam_search(const Config &config, const State &state, timer &t) {
         // DEBUG用: ログ収集
         if constexpr (DEBUG) {
             turn_logs.push_back(
-                selector.collect_log(turn, t.elapsed(), config.beam_width()));
+                selector.collect_log(turn, timer.elapsed(), config.beam_width()));
         }
 
         // 木を更新する
@@ -1124,7 +1093,7 @@ vector<Action> beam_search(const Config &config, const State &state, timer &t) {
 
         // 動的ビーム幅の調整（ベイズ推定）
         if (config.dynamic_beam) {
-            config.current_beam_width_ = suggester->suggest(t);
+            config.current_beam_width_ = suggester->suggest();
             selector.update_beam_width(config.beam_width());
         }
     }
@@ -1141,17 +1110,15 @@ struct Input {
     void input() {
         // todo: 入力読み込み
     }
-};
+} in;
 
 // ==========================================
 // Solver
 // ==========================================
 class Solver {
-    Input &in;
-    timer &total_timer;
 
   public:
-    Solver(Input &in, timer &total_timer) : in(in), total_timer(total_timer) {}
+    Solver() {}
     void solve() {
         // todo: 解法
     }
@@ -1161,10 +1128,8 @@ class Solver {
 };
 
 int main() {
-    timer total_timer;
-    Input in;
     in.input();
-    Solver solver(in, total_timer);
+    Solver solver;
     solver.solve();
     solver.print();
     return 0;

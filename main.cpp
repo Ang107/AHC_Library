@@ -3,12 +3,7 @@
 // #pragma GCC optimize("unroll-loops")
 // #pragma GCC optimize("Ofast")
 #include <bits/stdc++.h>
-// INCLUDE <experimental/simd>
-// INCLUDE <atcoder/all>
-#include <ext/pb_ds/assoc_container.hpp> // clangで提出する場合はコメントアウト
-// #include <immintrin.h>
-// #include <sys/time.h>
-// #include <x86intrin.h>
+
 using namespace std;
 constexpr bool DEBUG = true;
 constexpr double TIME_LIMIT = 1.95;
@@ -29,31 +24,6 @@ using f64 = double;
 #define rep(i, n) for (i64 i = 0; i < (i64)(n); i++)
 template <class T> using min_queue = priority_queue<T, vector<T>, greater<T>>;
 template <class T> using max_queue = priority_queue<T>;
-struct uint64_hash {
-    static inline uint64_t rotr(uint64_t x, unsigned k) {
-        return (x >> k) | (x << (8U * sizeof(uint64_t) - k));
-    }
-    static inline uint64_t hash_int(uint64_t x) noexcept {
-        auto h1 = x * (uint64_t)(0xA24BAED4963EE407);
-        auto h2 = rotr(x, 32U) * (uint64_t)(0x9FB21C651E98DF25);
-        auto h = rotr(h1 + h2, 32U);
-        return h;
-    }
-    size_t operator()(uint64_t x) const {
-        static const uint64_t FIXED_RANDOM =
-            std::chrono::steady_clock::now().time_since_epoch().count();
-        return hash_int(x + FIXED_RANDOM);
-    }
-};
-template <typename K, typename V,
-          typename Hash = uint64_hash> // clangで提出する場合はコメントアウト
-using hash_map =
-    __gnu_pbds::gp_hash_table<K, V,
-                              Hash>; // clangで提出する場合はコメントアウト
-template <typename K,
-          typename Hash = uint64_hash> // clangで提出する場合はコメントアウト
-using hash_set = hash_map<K, __gnu_pbds::null_type,
-                          Hash>; // clangで提出する場合はコメントアウト
 
 // Constant
 const double pi = 3.141592653589793238;
@@ -412,16 +382,15 @@ class AliasWeightedSampler {
     }
 };
 // Timer
-struct timer {
-    chrono::high_resolution_clock::time_point t_begin;
-    timer() { t_begin = chrono::high_resolution_clock::now(); }
-    void reset() { t_begin = chrono::high_resolution_clock::now(); }
+struct Timer {
+    chrono::steady_clock::time_point t_begin;
+    Timer() { t_begin = chrono::steady_clock::now(); }
+    void reset() { t_begin = chrono::steady_clock::now(); }
     float elapsed() const {
-        return chrono::duration<float>(chrono::high_resolution_clock::now() -
-                                       t_begin)
+        return chrono::duration<float>(chrono::steady_clock::now() - t_begin)
             .count();
     }
-};
+} timer;
 // Util
 template <class T> T &smin(T &x, T const &y) {
     x = min(x, y);
@@ -486,17 +455,15 @@ struct Input {
     void input() {
         // todo: 入力読み込み
     }
-};
+} in;
 
 // ==========================================
 // Solver
 // ==========================================
 class Solver {
-    Input &in;
-    timer &total_timer;
 
   public:
-    Solver(Input &in, timer &total_timer) : in(in), total_timer(total_timer) {}
+    Solver() {}
     void solve() {
         // todo: 解法
     }
@@ -506,10 +473,8 @@ class Solver {
 };
 
 int main() {
-    timer total_timer;
-    Input in;
     in.input();
-    Solver solver(in, total_timer);
+    Solver solver;
     solver.solve();
     solver.print();
     return 0;
