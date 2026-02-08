@@ -21,7 +21,8 @@ constexpr double START_TEMP = 1000.0;
 constexpr double END_TEMP = 10.0;
 constexpr int TIME_CHECK_INTERVAL = 0x7F; // 時間チェック頻度 (ビットマスク)
 constexpr int STATS_INTERVAL = 10 * (TIME_CHECK_INTERVAL + 1); // 統計出力頻度
-constexpr bool USE_EXPONENTIAL_DECAY = true; // true: 指数減衰, false: 線形減衰
+constexpr bool USE_EXPONENTIAL_DECAY = true; // true: 指数減衰, false: べき乗減衰
+constexpr double POWER_DECAY_EXP = 1.0;     // べき乗減衰の指数 (1.0で線形, >1で序盤高温維持, <1で序盤急冷)
 constexpr bool ALLOW_WORSE_MOVES = true;     // true: SA, false: 山登り
 
 // 近傍操作の定義
@@ -48,8 +49,9 @@ inline void init_temp_table() {
             double ratio = END_TEMP / START_TEMP;
             temp_table[i] = START_TEMP * pow(ratio, progress);
         } else {
-            // 線形減衰
-            temp_table[i] = START_TEMP + (END_TEMP - START_TEMP) * progress;
+            // べき乗減衰: start - (start - end) * progress^x (x=1で線形)
+            double p = pow(progress, POWER_DECAY_EXP);
+            temp_table[i] = START_TEMP - (START_TEMP - END_TEMP) * p;
         }
     }
 }
