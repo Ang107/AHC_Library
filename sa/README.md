@@ -15,7 +15,7 @@ AtCoder Heuristic Contest (AHC) 用の焼きなましテンプレートと可視
 
 - **高速な乱数生成器**: xoshiro256**ベース
 - **テーブルルックアップ**: 温度減衰・log計算の高速化（線形補間付き）
-- **複数の近傍操作**: Walker's Alias Method による O(1) 重み付き選択
+- **複数の近傍操作**: `AliasWeightedSampler` による O(1) 重み付き選択（遅延テーブル再構築）
 - **閾値ベースの採用判定**: `exp(-delta/T)` ではなく `T * log(rand)` との比較で高速化
 - **統計情報の出力**: 可視化ツール連携用のJSON形式ログ
 - **最大化/最小化の切り替え**: `MAXIMIZE` フラグで制御
@@ -33,7 +33,8 @@ constexpr bool MAXIMIZE = true;                    // true: 最大化, false: �
 constexpr double TIME_LIMIT = 1.95;                // 時間制限
 constexpr double START_TEMP = 1000.0;              // 開始温度
 constexpr double END_TEMP = 10.0;                  // 終了温度
-constexpr bool USE_EXPONENTIAL_DECAY = true;       // true: 指数減衰, false: 線形減衰
+constexpr bool USE_EXPONENTIAL_DECAY = true;       // true: 指数減衰, false: べき乗減衰
+constexpr double POWER_DECAY_EXP = 1.0;           // べき乗減衰の指数 (1.0で線形, >1で序盤高温維持, <1で序盤急冷)
 constexpr bool ALLOW_WORSE_MOVES = true;           // false: 山登り法
 constexpr int TIME_CHECK_INTERVAL = 0x7F;          // 時間チェック頻度（ビットマスク）
 constexpr int STATS_INTERVAL = 10 * (TIME_CHECK_INTERVAL + 1); // 統計出力頻度
@@ -41,7 +42,7 @@ constexpr int STATS_INTERVAL = 10 * (TIME_CHECK_INTERVAL + 1); // 統計出力�
 // 近傍操作の定義
 enum MoveType { SWAP, INSERT, REVERSE, NUM_MOVES };
 vector<string> MOVE_NAMES = {"SWAP", "INSERT", "REVERSE"};
-vector<int> MOVE_WEIGHTS = {1, 1, 1};
+vector<double> MOVE_WEIGHTS = {1, 1, 1};
 ```
 
 ### 2. `Input` を定義
@@ -67,7 +68,7 @@ vector<int> MOVE_WEIGHTS = {1, 1, 1};
 // 例: 巡回セールスマン問題の場合
 enum MoveType { TWO_OPT, OR_OPT, NUM_MOVES };
 vector<string> MOVE_NAMES = {"TWO_OPT", "OR_OPT"};
-vector<int> MOVE_WEIGHTS = {3, 1};  // 2-opt を重視
+vector<double> MOVE_WEIGHTS = {3, 1};  // 2-opt を重視
 ```
 
 ### 5. `Solver` を実装

@@ -31,7 +31,7 @@ AHC共通のベーステンプレートです。以下のユーティリティ�
 - **型エイリアス**: `i32`, `u64`, `f64` など
 - **高速ハッシュマップ**: `hash_map`, `hash_set`（pb_dsベース）
 - **デバッグ出力**: `debug()` で任意の型を標準エラーに出力
-- **乱数生成器**: `RNG`（xoshiro256**ベース、Walker's Alias Method対応）
+- **乱数生成器**: `RNG`（xoshiro256**ベース）、重み付きサンプリング（`FenwickWeightedSampler`, `AliasWeightedSampler`）
 - **タイマー**: `timer` 構造体
 - **コレクション出力**: vector, map, tuple等の `<<` オーバーロード
 - **ビット操作**: `bit()`, `setbit()`, `getbit()`, `lsb()`, `msb()`
