@@ -266,9 +266,18 @@ struct RNG {
     inline double randomDouble() {
         return (double)randomInt32() / 4294967296.0;
     }
+    inline double randomDoubleOpen01() {
+        return (randomInt32() + 1.0) / 4294967297.0;
+    }
     inline float randomFloat() { return (float)randomInt32() / 4294967296.0; }
     inline double randomRangeDouble(double l, double r) {
         return l + randomDouble() * (r - l);
+    }
+    inline double randomGaussian(double mean = 0.0, double stddev = 1.0) {
+        double u1 = randomDoubleOpen01();
+        double u2 = randomDouble();
+        double z = sqrt(-2.0 * log(u1)) * cos(2.0 * 3.141592653589793238 * u2);
+        return mean + stddev * z;
     }
     template <class T> void shuffle(vector<T> &v) {
         i32 sz = v.size();
@@ -289,6 +298,78 @@ struct RNG {
     }
     template <class T> inline T sample(vector<T> const &v) {
         return v[sample_index(v)];
+    }
+    struct AliasTable {
+        int n;
+        vector<u32> thresh;
+        vector<int> alias;
+
+        AliasTable() : n(0) {}
+
+        template <class T> void build(const vector<T> &weights) {
+            n = weights.size();
+            thresh.resize(n);
+            alias.resize(n);
+            if constexpr (DEBUG) {
+                assert(n > 0);
+            }
+            if (n == 0)
+                return;
+
+            double sum = 0;
+            for (auto &w : weights) {
+                sum += (double)w;
+            }
+            if constexpr (DEBUG) {
+                assert(sum > 0.0);
+            }
+
+            vector<double> prob(n);
+            for (int i = 0; i < n; i++)
+                prob[i] = (double)weights[i] / sum * n;
+
+            vector<int> small, large;
+            small.reserve(n);
+            large.reserve(n);
+            for (int i = 0; i < n; i++) {
+                if (prob[i] < 1.0)
+                    small.push_back(i);
+                else
+                    large.push_back(i);
+            }
+
+            while (!small.empty() && !large.empty()) {
+                int s = small.back();
+                small.pop_back();
+                int l = large.back();
+                large.pop_back();
+                thresh[s] = (u32)(prob[s] * 4294967296.0);
+                alias[s] = l;
+                prob[l] -= (1.0 - prob[s]);
+                if (prob[l] < 1.0)
+                    small.push_back(l);
+                else
+                    large.push_back(l);
+            }
+            while (!large.empty()) {
+                int i = large.back();
+                thresh[i] = ~(u32)0;
+                alias[i] = i;
+                large.pop_back();
+            }
+            while (!small.empty()) {
+                int i = small.back();
+                thresh[i] = ~(u32)0;
+                alias[i] = i;
+                small.pop_back();
+            }
+        }
+    };
+
+    inline int choices(const AliasTable &table) {
+        int i = random32(table.n);
+        u32 r = randomInt32();
+        return r < table.thresh[i] ? i : table.alias[i];
     }
 } rng;
 // Timer

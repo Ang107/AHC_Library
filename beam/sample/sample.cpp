@@ -176,12 +176,17 @@ struct RNG {
         return (double)randomInt32() / 4294967296.0;
     }
     inline double randomDoubleOpen01() {
-        // (0,1] を返す（logの入力で0を避ける）
         return (randomInt32() + 1.0) / 4294967297.0;
     }
     inline float randomFloat() { return (float)randomInt32() / 4294967296.0; }
     inline double randomRangeDouble(double l, double r) {
         return l + randomDouble() * (r - l);
+    }
+    inline double randomGaussian(double mean = 0.0, double stddev = 1.0) {
+        double u1 = randomDoubleOpen01();
+        double u2 = randomDouble();
+        double z = sqrt(-2.0 * log(u1)) * cos(2.0 * 3.141592653589793238 * u2);
+        return mean + stddev * z;
     }
     template <class T> void shuffle(vector<T> &v) {
         i32 sz = v.size();
@@ -203,17 +208,13 @@ struct RNG {
     template <class T> inline T sample(vector<T> const &v) {
         return v[sample_index(v)];
     }
-
-    // Weighted random choice using Walker's Alias Method
-    // 前処理 O(n), サンプリング O(1)
     struct AliasTable {
         int n;
-        vector<u32> thresh; // threshold (0 ~ 2^32-1)
+        vector<u32> thresh;
         vector<int> alias;
 
         AliasTable() : n(0) {}
 
-        // weights: 非負の重み（整数でも浮動小数点でもOK）
         template <class T> void build(const vector<T> &weights) {
             n = weights.size();
             thresh.resize(n);
@@ -226,21 +227,16 @@ struct RNG {
 
             double sum = 0;
             for (auto &w : weights) {
-                if constexpr (DEBUG) {
-                    assert(w > 0);
-                }
                 sum += (double)w;
             }
             if constexpr (DEBUG) {
                 assert(sum > 0.0);
             }
 
-            // prob[i] = weights[i] / sum * n （平均が1になるようスケーリング）
             vector<double> prob(n);
             for (int i = 0; i < n; i++)
                 prob[i] = (double)weights[i] / sum * n;
 
-            // small/large に分類
             vector<int> small, large;
             small.reserve(n);
             large.reserve(n);
@@ -279,7 +275,6 @@ struct RNG {
         }
     };
 
-    // AliasTableからO(1)でサンプリング
     inline int choices(const AliasTable &table) {
         int i = random32(table.n);
         u32 r = randomInt32();

@@ -177,12 +177,17 @@ struct RNG {
         return (double)randomInt32() / 4294967296.0;
     }
     inline double randomDoubleOpen01() {
-        // (0,1] を返す（logの入力で0を避ける）
         return (randomInt32() + 1.0) / 4294967297.0;
     }
     inline float randomFloat() { return (float)randomInt32() / 4294967296.0; }
     inline double randomRangeDouble(double l, double r) {
         return l + randomDouble() * (r - l);
+    }
+    inline double randomGaussian(double mean = 0.0, double stddev = 1.0) {
+        double u1 = randomDoubleOpen01();
+        double u2 = randomDouble();
+        double z = sqrt(-2.0 * log(u1)) * cos(2.0 * 3.141592653589793238 * u2);
+        return mean + stddev * z;
     }
     template <class T> void shuffle(vector<T> &v) {
         i32 sz = v.size();
@@ -204,89 +209,208 @@ struct RNG {
     template <class T> inline T sample(vector<T> const &v) {
         return v[sample_index(v)];
     }
+} rng;
+class FenwickWeightedSampler {
+  private:
+    int n_ = 0;
+    vector<double> bit_;
+    vector<double> weight_;
+    double total_ = 0.0;
 
-    // Weighted random choice using Walker's Alias Method
-    // 前処理 O(n), サンプリング O(1)
-    struct AliasTable {
-        int n;
-        vector<u32> thresh; // threshold (0 ~ 2^32-1)
-        vector<int> alias;
+    void add_internal(int idx0, double delta) {
+        int i = idx0 + 1;
+        while (i <= n_) {
+            bit_[i] += delta;
+            i += i & -i;
+        }
+    }
 
-        AliasTable() : n(0) {}
-
-        // weights: 非負の重み（整数でも浮動小数点でもOK）
-        template <class T> void build(const vector<T> &weights) {
-            n = weights.size();
-            thresh.resize(n);
-            alias.resize(n);
-            if constexpr (DEBUG) {
-                assert(n > 0);
+  public:
+    // Complexity: O(n)
+    void init(int n, double initial_weight = 0.0) {
+        n_ = n;
+        bit_.assign(n_ + 1, 0.0);
+        weight_.assign(n_, initial_weight);
+        total_ = 0.0;
+        if (initial_weight != 0.0) {
+            for (int i = 0; i < n_; i++) {
+                add_internal(i, initial_weight);
             }
-            if (n == 0)
-                return;
+            total_ = initial_weight * n_;
+        }
+    }
 
-            double sum = 0;
-            for (auto &w : weights) {
-                if constexpr (DEBUG) {
-                    assert(w > 0);
-                }
-                sum += (double)w;
-            }
-            if constexpr (DEBUG) {
-                assert(sum > 0.0);
-            }
+    // Complexity: O(n log n)
+    void build(const vector<double> &weights) {
+        init((int)weights.size(), 0.0);
+        for (int i = 0; i < n_; i++) {
+            weight_[i] = weights[i];
+            add_internal(i, weights[i]);
+            total_ += weights[i];
+        }
+    }
 
-            // prob[i] = weights[i] / sum * n （平均が1になるようスケーリング）
-            vector<double> prob(n);
-            for (int i = 0; i < n; i++)
-                prob[i] = (double)weights[i] / sum * n;
+    // Complexity: O(log n)
+    void set_weight(int idx, double new_weight) {
+        assert(0 <= idx && idx < n_);
+        const double delta = new_weight - weight_[idx];
+        weight_[idx] = new_weight;
+        add_internal(idx, delta);
+        total_ += delta;
+    }
 
-            // small/large に分類
-            vector<int> small, large;
-            small.reserve(n);
-            large.reserve(n);
-            for (int i = 0; i < n; i++) {
-                if (prob[i] < 1.0)
-                    small.push_back(i);
-                else
-                    large.push_back(i);
-            }
+    // Complexity: O(log n)
+    void add_weight(int idx, double delta) {
+        assert(0 <= idx && idx < n_);
+        weight_[idx] += delta;
+        add_internal(idx, delta);
+        total_ += delta;
+    }
 
-            while (!small.empty() && !large.empty()) {
-                int s = small.back();
-                small.pop_back();
-                int l = large.back();
-                large.pop_back();
-                thresh[s] = (u32)(prob[s] * 4294967296.0);
-                alias[s] = l;
-                prob[l] -= (1.0 - prob[s]);
-                if (prob[l] < 1.0)
-                    small.push_back(l);
-                else
-                    large.push_back(l);
-            }
-            while (!large.empty()) {
-                int i = large.back();
-                thresh[i] = ~(u32)0;
-                alias[i] = i;
-                large.pop_back();
-            }
-            while (!small.empty()) {
-                int i = small.back();
-                thresh[i] = ~(u32)0;
-                alias[i] = i;
-                small.pop_back();
+    // Complexity: O(log n)
+    int sample() const {
+        assert(n_ > 0);
+        assert(total_ > 0.0);
+        const double r = rng.randomDouble() * total_;
+
+        int idx = 0;
+        double prefix = 0.0;
+        int step = 1;
+        while ((step << 1) <= n_)
+            step <<= 1;
+        for (int k = step; k > 0; k >>= 1) {
+            const int nxt = idx + k;
+            if (nxt <= n_ && prefix + bit_[nxt] <= r) {
+                idx = nxt;
+                prefix += bit_[nxt];
             }
         }
-    };
-
-    // AliasTableからO(1)でサンプリング
-    inline int choices(const AliasTable &table) {
-        int i = random32(table.n);
-        u32 r = randomInt32();
-        return r < table.thresh[i] ? i : table.alias[i];
+        if (idx >= n_)
+            idx = n_ - 1;
+        return idx;
     }
-} rng;
+
+    int size() const { return n_; }
+    double total_weight() const { return total_; }
+    double weight(int idx) const {
+        assert(0 <= idx && idx < n_);
+        return weight_[idx];
+    }
+};
+class AliasWeightedSampler {
+  private:
+    int n_ = 0;
+    vector<double> weight_;
+    double total_ = 0.0;
+    vector<double> prob_;
+    vector<int> alias_;
+    bool dirty_ = true;
+
+    // Complexity: O(n)
+    void rebuild_alias_table() {
+        prob_.assign(n_, 0.0);
+        alias_.assign(n_, 0);
+        total_ = 0.0;
+        for (double w : weight_)
+            total_ += w;
+        assert(total_ > 0.0);
+
+        vector<double> scaled(n_);
+        vector<int> small;
+        vector<int> large;
+        small.reserve(n_);
+        large.reserve(n_);
+        for (int i = 0; i < n_; i++) {
+            scaled[i] = weight_[i] * n_ / total_;
+            if (scaled[i] < 1.0) {
+                small.push_back(i);
+            } else {
+                large.push_back(i);
+            }
+        }
+
+        while (!small.empty() && !large.empty()) {
+            const int s = small.back();
+            small.pop_back();
+            const int l = large.back();
+            large.pop_back();
+            prob_[s] = scaled[s];
+            alias_[s] = l;
+            scaled[l] -= (1.0 - scaled[s]);
+            if (scaled[l] < 1.0) {
+                small.push_back(l);
+            } else {
+                large.push_back(l);
+            }
+        }
+        while (!large.empty()) {
+            const int i = large.back();
+            large.pop_back();
+            prob_[i] = 1.0;
+            alias_[i] = i;
+        }
+        while (!small.empty()) {
+            const int i = small.back();
+            small.pop_back();
+            prob_[i] = 1.0;
+            alias_[i] = i;
+        }
+        dirty_ = false;
+    }
+
+  public:
+    // Complexity: O(n)
+    void init(int n, double initial_weight = 0.0) {
+        n_ = n;
+        weight_.assign(n_, initial_weight);
+        total_ = initial_weight * n_;
+        prob_.clear();
+        alias_.clear();
+        dirty_ = true;
+    }
+
+    // Complexity: O(n)
+    void build(const vector<double> &weights) {
+        n_ = (int)weights.size();
+        weight_ = weights;
+        dirty_ = true;
+        // Build lazily on sample() to allow batch updates before first use.
+    }
+
+    // Complexity: O(1), table becomes dirty
+    void set_weight(int idx, double new_weight) {
+        assert(0 <= idx && idx < n_);
+        weight_[idx] = new_weight;
+        dirty_ = true;
+    }
+
+    // Complexity: O(1), table becomes dirty
+    void add_weight(int idx, double delta) {
+        assert(0 <= idx && idx < n_);
+        weight_[idx] += delta;
+        dirty_ = true;
+    }
+
+    // Complexity: O(1) after table is ready, O(n) if rebuild is needed
+    int sample() {
+        assert(n_ > 0);
+        if (dirty_)
+            rebuild_alias_table();
+        const int i = (int)rng.random32((uint32_t)n_);
+        return (rng.randomDouble() < prob_[i]) ? i : alias_[i];
+    }
+
+    int size() const { return n_; }
+    double total_weight() {
+        if (dirty_)
+            rebuild_alias_table();
+        return total_;
+    }
+    double weight(int idx) const {
+        assert(0 <= idx && idx < n_);
+        return weight_[idx];
+    }
+};
 // Timer
 struct timer {
     chrono::high_resolution_clock::time_point t_begin;
