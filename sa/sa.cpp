@@ -21,9 +21,11 @@ constexpr double START_TEMP = 1000.0;
 constexpr double END_TEMP = 10.0;
 constexpr int TIME_CHECK_INTERVAL = 0x7F; // 時間チェック頻度 (ビットマスク)
 constexpr int STATS_INTERVAL = 10 * (TIME_CHECK_INTERVAL + 1); // 統計出力頻度
-constexpr bool USE_EXPONENTIAL_DECAY = true; // true: 指数減衰, false: べき乗減衰
-constexpr double POWER_DECAY_EXP = 1.0;     // べき乗減衰の指数 (1.0で線形, >1で序盤高温維持, <1で序盤急冷)
-constexpr bool ALLOW_WORSE_MOVES = true;     // true: SA, false: 山登り
+constexpr bool USE_EXPONENTIAL_DECAY =
+    true; // true: 指数減衰, false: べき乗減衰
+constexpr double POWER_DECAY_EXP =
+    1.0; // べき乗減衰の指数 (1.0で線形, >1で序盤高温維持, <1で序盤急冷)
+constexpr bool ALLOW_WORSE_MOVES = true; // true: SA, false: 山登り
 
 // 近傍操作の定義
 enum MoveType { SWAP, INSERT, REVERSE, NUM_MOVES };
@@ -34,67 +36,6 @@ vector<string> MOVE_NAMES = {"SWAP", "INSERT", "REVERSE"};
 // 近傍の重み（整数、合計値は任意）
 // SWAP, INSERT, REVERSE の順
 vector<double> MOVE_WEIGHTS = {1, 1, 1};
-
-// テーブルサイズ（温度・logで共通）
-constexpr int TABLE_SIZE = 1024;
-
-// 温度減衰テーブル
-double temp_table[TABLE_SIZE + 1];
-
-inline void init_temp_table() {
-    for (int i = 0; i <= TABLE_SIZE; i++) {
-        double progress = (double)i / TABLE_SIZE;
-        if constexpr (USE_EXPONENTIAL_DECAY) {
-            // 指数減衰
-            double ratio = END_TEMP / START_TEMP;
-            temp_table[i] = START_TEMP * pow(ratio, progress);
-        } else {
-            // べき乗減衰: start - (start - end) * progress^x (x=1で線形)
-            double p = pow(progress, POWER_DECAY_EXP);
-            temp_table[i] = START_TEMP - (START_TEMP - END_TEMP) * p;
-        }
-    }
-}
-
-inline double temp_decay(double progress) {
-    // テーブルルックアップ + 線形補間
-    double index = progress * TABLE_SIZE;
-    int idx = (int)index;
-    if (idx >= TABLE_SIZE)
-        return temp_table[TABLE_SIZE];
-
-    double frac = index - idx;
-    return temp_table[idx] * (1.0 - frac) + temp_table[idx + 1] * frac;
-}
-
-// logテーブル
-double log_table[TABLE_SIZE + 1];
-
-inline void init_log_table() {
-    for (int i = 0; i <= TABLE_SIZE; i++) {
-        double x = (double)i / TABLE_SIZE;
-        if (x == 0.0) {
-            log_table[i] = -10.0; // log(0) = -inf を有限値で近似
-        } else {
-            log_table[i] = log(x);
-        }
-    }
-}
-
-inline double log_fast(double x) {
-    if (x <= 0.0)
-        return -10.0;
-    if (x >= 1.0)
-        return 0.0;
-
-    double index = x * TABLE_SIZE;
-    int idx = (int)index;
-    if (idx >= TABLE_SIZE)
-        return log_table[TABLE_SIZE];
-
-    double frac = index - idx;
-    return log_table[idx] * (1.0 - frac) + log_table[idx + 1] * frac;
-}
 
 // Macros
 #define el '\n'
@@ -555,12 +496,88 @@ __attribute__((always_inline)) inline u64 lsb(u64 a) {
 __attribute__((always_inline)) inline int msb(uint64_t bb) {
     return __builtin_clzll(bb) ^ 63;
 }
+// 入出力高速化
 struct Init {
     Init() {
         ios::sync_with_stdio(0);
         cin.tie(0);
     }
 } init;
+// テーブルサイズ（温度・logで共通）
+constexpr int TABLE_SIZE = 1024;
+
+// 温度減衰テーブル
+double temp_table[TABLE_SIZE + 1];
+
+inline void init_temp_table() {
+    for (int i = 0; i <= TABLE_SIZE; i++) {
+        double progress = (double)i / TABLE_SIZE;
+        if constexpr (USE_EXPONENTIAL_DECAY) {
+            // 指数減衰
+            double ratio = END_TEMP / START_TEMP;
+            temp_table[i] = START_TEMP * pow(ratio, progress);
+        } else {
+            // べき乗減衰: start - (start - end) * progress^x (x=1で線形)
+            double p = pow(progress, POWER_DECAY_EXP);
+            temp_table[i] = START_TEMP - (START_TEMP - END_TEMP) * p;
+        }
+    }
+}
+
+inline double temp_decay(double progress) {
+    // テーブルルックアップ + 線形補間
+    double index = progress * TABLE_SIZE;
+    int idx = (int)index;
+    if (idx >= TABLE_SIZE)
+        return temp_table[TABLE_SIZE];
+
+    double frac = index - idx;
+    return temp_table[idx] * (1.0 - frac) + temp_table[idx + 1] * frac;
+}
+
+// logテーブル
+double log_table[TABLE_SIZE + 1];
+
+inline void init_log_table() {
+    for (int i = 0; i <= TABLE_SIZE; i++) {
+        double x = (double)i / TABLE_SIZE;
+        if (x == 0.0) {
+            log_table[i] = -10.0; // log(0) = -inf を有限値で近似
+        } else {
+            log_table[i] = log(x);
+        }
+    }
+}
+
+inline double log_fast(double x) {
+    if constexpr (DEBUG)
+        assert(0.0 < x && x < 1.0);
+
+    double index = x * TABLE_SIZE;
+    int idx = (int)index;
+    if (idx >= TABLE_SIZE)
+        return log_table[TABLE_SIZE];
+
+    double frac = index - idx;
+    return log_table[idx] * (1.0 - frac) + log_table[idx + 1] * frac;
+}
+
+// ガウシアンテーブル（Box-Mullerの事前計算）
+constexpr int GAUSS_TABLE_SIZE = 131072;
+double gauss_table[GAUSS_TABLE_SIZE];
+
+inline void init_gauss_table() {
+    for (int i = 0; i < GAUSS_TABLE_SIZE; i++) {
+        double u1 = rng.randomDoubleOpen01();
+        double u2 = rng.randomDouble();
+        gauss_table[i] =
+            sqrt(-2.0 * log(u1)) * cos(2.0 * 3.141592653589793238 * u2);
+    }
+}
+
+inline double fast_gaussian(double mean, double stddev) {
+    return mean + stddev * gauss_table[rng.random32(GAUSS_TABLE_SIZE)];
+}
 
 // ==========================================
 // Input & State
@@ -774,6 +791,7 @@ int main() {
     timer total_timer;
     init_temp_table(); // 温度減衰テーブルの初期化
     init_log_table();  // logテーブルの初期化
+    // init_gauss_table(); // ガウシアンテーブルの初期化
     Input in;
     in.input();
     Solver solver(in, total_timer);
