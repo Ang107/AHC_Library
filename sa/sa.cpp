@@ -1,4 +1,3 @@
-
 // #pragma GCC optimize("O3")
 // #pragma GCC optimize("unroll-loops")
 // #pragma GCC optimize("Ofast")
@@ -707,8 +706,8 @@ class SA {
                                          : (next_score < state.score);
                 }
 
+                // todo: 更新
                 state.score = next_score;
-
                 if (is_better) {
                     if constexpr (ALLOW_WORSE_MOVES) {
                         best_state = state;
@@ -716,7 +715,6 @@ class SA {
                     if constexpr (DEBUG)
                         stats[move_type].update_best_cnt++;
                 }
-                // todo: 更新
             } else {
                 // todo: ロールバック
             }
