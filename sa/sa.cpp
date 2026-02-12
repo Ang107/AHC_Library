@@ -758,5 +758,9 @@ int main() {
     Solver solver;
     solver.solve();
     solver.print();
-    return 0;
+
+    // 高速に終了する
+    cout.flush();
+    cerr.flush();
+    _Exit(0);
 }

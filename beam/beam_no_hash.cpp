@@ -1082,8 +1082,8 @@ vector<Action> beam_search(const Config &config, const State &state) {
 
         // DEBUG用: ログ収集
         if constexpr (DEBUG) {
-            turn_logs.push_back(
-                selector.collect_log(turn, timer.elapsed(), config.beam_width()));
+            turn_logs.push_back(selector.collect_log(turn, timer.elapsed(),
+                                                     config.beam_width()));
         }
 
         // 木を更新する
@@ -1132,5 +1132,9 @@ int main() {
     Solver solver;
     solver.solve();
     solver.print();
-    return 0;
+
+    // 高速に終了する
+    cout.flush();
+    cerr.flush();
+    _Exit(0);
 }
