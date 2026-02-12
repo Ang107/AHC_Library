@@ -2,7 +2,7 @@
 
 ## 1. まず ASan で実行（最短）
 ```bash
-g++ -std=c++20 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I/home/xxx/lib/ac-library-master -o main_asan main.cpp && ./main_asan < tools/in/0000.txt
+g++-12 -std=gnu++23 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I/home/xxx/lib/ac-library-master -o main_asan main.cpp && ./main_asan < tools/in/0000.txt
 
 ```
 - 意味: 壊した場所を高確率で直接出す。
@@ -10,7 +10,7 @@ g++ -std=c++20 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I/ho
 
 ## 2. 位置が曖昧なら gdb
 ```bash
-g++ -std=c++20 -O0 -g -I/home/xxx/lib/ac-library-master -o main main.cpp && gdb ./main
+g++-12 -std=gnu++23 -O0 -g -I/home/xxx/lib/ac-library-master -o main main.cpp && gdb ./main
 ```
 ```gdb
 run < tools/in/0000.txt
